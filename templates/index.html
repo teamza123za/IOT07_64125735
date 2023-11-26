@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Weather Station</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.2.2/mqtt.min.js"
+        integrity="sha512-I8gBERqrEkyDqbjHj3aymzBVIPFs85vGSzy26+1P5weHzFp8vfJ8dARJz51n3oQ80DTdYn8MbhUiz5UAW2rMxw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Weather Station</h1>
+        <b>From NodeMCU</b>
+        <div class="row">
+            <div class="col-3">
+                <div class="row">
+                    <div class="col-4">
+                        <b>Temperature</b>
+                    </div>
+                    &nbsp
+                    <div class="col-8">
+                        <span id="lastTemp"></span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-4">
+                        <b>Humidity</b>
+                    </div>
+                    &nbsp
+                    <div class="col-8">
+                        <span id="lastHum"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-4">
+                <canvas id="myTempChart" width="200" height="200"></canvas>
+            </div>
+            <div class="col-4">
+                <canvas id="myHumChart" width="200" height="200"></canvas>
+            </div>
+            <div class="col-4">
+                <canvas id="myJsonChart" width="200" height="200"></canvas>
+            </div>
+        </div>
+
+
+        <div class="row">
+            <div class="col-4">
+                <button class="btn btn-primary" id="btnOn">On</button>
+                <button class="btn btn-primary" id="btnOff">Off</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-2.2.4.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-kenU1KFdBIe4zVF0s0G1M5b4hcpxyD9F7jL+jjXkk+Q2h455rYXK/7HAuoJl+0I4"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.5.0/dist/chart.min.js"></script>
+
+    <script>
+        let get_json = () => {
+            let url = "http://192.168.110.104:5000/thingspeak";
+            fetch(url)
+                .then((response) => response.json())
+                .then((json) => {
+                    console.log(json);
+                    console.log(json.channel);
+                    console.log(json.channel.field1);
+                });
+        };
+
+        let get_last = (myChart, xlabel, isTemperature) => {
+            let url = "http://192.168.110.104:5000/nodemcu/last";
+            fetch(url)
+                .then((response) => response.json())
+                .then((json) => {
+                    let id = json[0].id;
+                    let message = json[0].message;
+                    let sensor = $.parseJSON(message);
+
+                    if (isTemperature) {
+                        $("#lastHum").text(sensor.humidity.toFixed(2));
+                        $("#lastTemp").text(sensor.temperature.toFixed(2));
+                        updateChartData(myChart, xlabel, id, sensor.temperature);
+                    } else {
+                        $("#lastHum").text(sensor.humidity.toFixed(2));
+                        $("#lastTemp").text(sensor.temperature.toFixed(2));
+                        updateChartData(myChart, xlabel, id, sensor.humidity);
+                    }
+                });
+        };
+
+        let updateChartData = (myChart, xlabel, id, newData, isTemperature) => {
+            xlabel.push(id);
+            myChart.data.labels = xlabel;
+
+            if (isTemperature) {
+                myChart.data.datasets[0].label = "Temperature";
+            } else {
+                myChart.data.datasets[0].label = "Humidity";
+            }
+
+            myChart.data.datasets[0].data.push(newData);
+
+            if (myChart.data.labels.length > 7) {
+                myChart.data.labels.shift();
+                myChart.data.datasets[0].data.shift();
+            }
+
+            myChart.update();
+        };
+
+
+        let showChartTemp = () => {
+            var ctx = $("#myTempChart")[0];
+            var data1 = [];
+            var xlabel = [];
+
+            var myTempChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: xlabel,
+                    datasets: [
+                        {
+                            label: "Temperature",
+                            data: data1,
+                        },
+                    ],
+                },
+            });
+
+            get_last(myTempChart, xlabel, true);
+
+            setInterval(() => get_last(myTempChart, xlabel, true), 5000);
+        };
+
+        let showChartHum = () => {
+            var ctx = $("#myHumChart")[0];
+            var data2 = [];
+            var xlabel2 = [];
+
+            var myHumChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: xlabel2,
+                    datasets: [
+                        {
+                            label: "Humidity",
+                            data: data2,
+                        },
+                    ],
+                },
+            });
+
+            get_last(myHumChart, xlabel2, false);
+
+            setInterval(() => get_last(myHumChart, xlabel2, false), 5000);
+        };
+
+        let showChartv2 = (ctx, plot_data, label) => {
+            var myJsonChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: plot_data.xlabel,
+                    datasets: [
+                        {
+                            label: label,
+                            data: plot_data.data,
+                        },
+                    ],
+                },
+            });
+        };
+
+
+        let showThingSpeakChart = () => {
+            const fetchData = () => {
+                let url = "http://192.168.110.104:5000/thingspeak";
+                fetch(url)
+                    .then((response) => response.json())
+                    .then((json) => {
+                        console.log(json);
+
+                        let plot_data = Object();
+                        let xlabelTemp = [];
+                        let dataTemp = [];
+
+                        json.feeds.forEach((feed) => {
+                            let timeString = new Date(feed.created_at).toLocaleTimeString([], { hour12: false });
+                            xlabelTemp.push(timeString);
+                            dataTemp.push(parseFloat(feed.field1));  // Parse the field1 value as a float
+                        });
+
+                        xlabelTemp = xlabelTemp.slice(-7);
+                        dataTemp = dataTemp.slice(-7);
+
+                        plot_data.xlabel = xlabelTemp;
+                        plot_data.data = dataTemp;
+
+                        // Use the field1 name as the label for the dataset
+                        plot_data.label = json.channel.field1;
+
+                        showChartv2($("#myJsonChart")[0], plot_data, plot_data.label);
+                    });
+            };
+
+            fetchData();
+
+            setInterval(fetchData, 10000);
+        };
+
+        $(() => {
+            $("#btnOn").click(() => {
+                $.get("/nodemcu/led/on", function (data) {
+                    console.log("LED turned on");
+                });
+            });
+            $("#btnOff").click(() => {
+                $.get("/nodemcu/led/off", function (data) {
+                    console.log("LED turned off");
+                });
+            });
+
+            get_json();
+            showChartTemp();
+            showChartHum();
+            showThingSpeakChart();
+        });
+    </script>
+</body>
+
+</html>
